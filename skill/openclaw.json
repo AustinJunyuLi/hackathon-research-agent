@@ -1,0 +1,20 @@
+{
+  "skill": "research-agent",
+  "cron": [
+    {
+      "id": "daily-arxiv-scan",
+      "description": "Scan arXiv for new papers matching research interests",
+      "schedule": {
+        "type": "cron",
+        "expression": "0 8 * * *"
+      },
+      "execution": "isolated",
+      "task": "Check arXiv for new papers in the categories defined in memory/profile.json. Triage any new papers not in memory/seen.json. Announce summaries of HIGH relevance papers.",
+      "delivery": {
+        "method": "announce",
+        "channel": "research-updates"
+      },
+      "enabled": false
+    }
+  ]
+}
