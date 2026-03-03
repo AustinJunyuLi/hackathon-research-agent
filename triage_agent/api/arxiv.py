@@ -113,7 +113,10 @@ class ArxivClient:
     """Async client for the arXiv API."""
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
-        self._client = client or httpx.AsyncClient(timeout=30.0)
+        # arXiv now redirects HTTP -> HTTPS for the API endpoint.
+        # httpx does not follow redirects by default for AsyncClient,
+        # so we enable follow_redirects to avoid 301 errors.
+        self._client = client or httpx.AsyncClient(timeout=30.0, follow_redirects=True)
         self._owns_client = client is None
 
     async def fetch_paper(self, arxiv_input: str) -> PaperCard:
