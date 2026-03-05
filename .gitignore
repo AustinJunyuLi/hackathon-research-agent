@@ -26,6 +26,10 @@ output/
 out/
 batch_output/
 .worktrees/
+.playwright-mcp/
+DISCUSSION_*.md
+DISCUSSION_*.jsonl
+skill/memory/seen.json
 
 # OS
 .DS_Store
