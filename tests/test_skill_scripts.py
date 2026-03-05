@@ -26,6 +26,12 @@ def test_openclaw_cron_task_mentions_paper_id_drill_down() -> None:
     assert "paper ID" in cron_task
 
 
+def test_openclaw_cron_task_mentions_source_sync() -> None:
+    config = json.loads((SKILL_ROOT / "openclaw.json").read_text())
+    cron_task = config["cron"][0]["task"]
+    assert "sync enrolled research sources" in cron_task
+
+
 def test_setup_daily_cron_supports_whatsapp(monkeypatch, capsys) -> None:
     module = _load_module(SCRIPTS_ROOT / "setup_daily_cron.py", "setup_daily_cron")
     captured: dict[str, list[str]] = {}
@@ -56,6 +62,40 @@ def test_setup_daily_cron_supports_whatsapp(monkeypatch, capsys) -> None:
     message = cmd[cmd.index("--message") + 1]
     assert "Format the results for WhatsApp" in message
     assert json.loads(capsys.readouterr().out)["ok"] is True
+
+
+def test_setup_daily_cron_message_syncs_before_batch_triage() -> None:
+    module = _load_module(SCRIPTS_ROOT / "setup_daily_cron.py", "setup_daily_cron_sync")
+
+    message = module._build_message(REPO_ROOT, "ids.txt", "out/daily_latest")
+
+    assert "python3 skill/scripts/enroll.py sync" in message
+    assert "triage --batch-file ids.txt --format json --output-dir out/daily_latest" in message
+
+
+def test_run_triage_syncs_sources_before_triage(monkeypatch) -> None:
+    module = _load_module(SCRIPTS_ROOT / "run_triage.py", "run_triage_sync")
+    events: list[str] = []
+
+    def fake_sync() -> None:
+        events.append("sync")
+
+    async def fake_run_via_python(
+        arxiv_input: str,
+        output_format: str,
+        output_path: str | None,
+    ) -> None:
+        events.append(f"triage:{arxiv_input}:{output_format}:{output_path}")
+
+    monkeypatch.setattr(module, "sync_all_sources", fake_sync, raising=False)
+    monkeypatch.setattr(module, "_run_via_python", fake_run_via_python)
+    monkeypatch.setattr("sys.argv", ["run_triage.py", "2106.09685"])
+
+    import asyncio
+
+    asyncio.run(module.main())
+
+    assert events == ["sync", "triage:2106.09685:markdown:None"]
 
 
 def test_format_whatsapp_digest_groups_papers(tmp_path: Path) -> None:

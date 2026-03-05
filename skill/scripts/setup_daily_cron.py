@@ -19,6 +19,7 @@ def _build_message(project_root: Path, batch_file: str, output_dir: str) -> str:
         "Run exactly these steps:\n"
         f"1) Execute shell command: cd {project_root} && "
         "if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi && "
+        "python3 skill/scripts/enroll.py sync && "
         f"triage --batch-file {batch_file} --format json --output-dir {output_dir}\n"
         f"2) Read {output_dir}/batch_summary.json\n"
         "3) Reply with a concise digest (max 8 bullets), "

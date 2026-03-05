@@ -13,13 +13,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _discover_project_root() -> Path | None:
@@ -46,6 +50,13 @@ if PROJECT_ROOT:
     if default_manifest.exists():
         os.environ.setdefault("LOCAL_MANIFEST_PATH", str(default_manifest))
 
+try:
+    from triage_agent.sources.sync import sync_all_sources as _sync_all_sources
+except ModuleNotFoundError:
+    sync_all_sources: Callable[[], object] | None = None
+else:
+    sync_all_sources = _sync_all_sources
+
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 MEMORY_DIR = SKILL_DIR / "memory"
@@ -55,7 +66,9 @@ SEEN_FILE = MEMORY_DIR / "seen.json"
 def load_seen() -> dict[str, str]:
     """Load the set of previously triaged paper IDs."""
     if SEEN_FILE.exists():
-        return json.loads(SEEN_FILE.read_text())
+        payload = json.loads(SEEN_FILE.read_text())
+        if isinstance(payload, dict):
+            return {str(key): str(value) for key, value in payload.items()}
     return {}
 
 
@@ -71,6 +84,16 @@ def _extract_arxiv_id_fallback(value: str) -> str:
     if not match:
         raise ValueError(f"Could not extract arXiv ID from: {value}")
     return match.group(1)
+
+
+def _sync_sources_if_available() -> None:
+    if sync_all_sources is None:
+        return
+
+    try:
+        sync_all_sources()
+    except Exception as exc:
+        logger.warning("Source sync failed (continuing with existing manifest): %s", exc)
 
 
 def _run_via_triage_cli(arxiv_input: str, output_format: str, output_path: str | None) -> None:
@@ -139,6 +162,8 @@ async def main() -> None:
             output_format = args[i + 1]
         elif arg == "--output" and i + 1 < len(args):
             output_path = args[i + 1]
+
+    _sync_sources_if_available()
 
     # Try Python-package path first; fallback to triage CLI.
     try:
