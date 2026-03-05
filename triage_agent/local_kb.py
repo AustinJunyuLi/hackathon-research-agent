@@ -94,3 +94,16 @@ def load_local_manifest(path: str | Path | None = None) -> LocalManifest | None:
         # Invalid schema; ignore rather than raising in the main path.
         return None
 
+
+def write_local_manifest(
+    manifest_data: dict[str, Any],
+    path: Path | str | None = None,
+) -> Path:
+    """Write manifest data to a JSON file and return the resolved path."""
+    manifest_path = Path(path) if path is not None else _default_manifest_path()
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(manifest_data, indent=2),
+        encoding="utf-8",
+    )
+    return manifest_path
