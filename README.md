@@ -1,4 +1,4 @@
-# Triage Memo Agent
+# Research Agent — Autonomous Paper Triage on OpenClaw
 
 AI-powered research paper triage for arXiv papers.
 
@@ -11,6 +11,8 @@ Given an arXiv paper URL or ID, the agent:
 3. **Checks novelty** against closest prior art
 4. **Checks local overlap** against your `local_kb/local_manifest.json`
 5. **Assembles** a structured memo + read recommendation
+6. **Optionally syncs enrolled sources** from Overleaf, GitHub, or a local folder before triage
+7. **Delivers a daily digest** to Discord or WhatsApp through OpenClaw cron
 
 ## Architecture
 
@@ -79,6 +81,7 @@ Skill folder is under `skill/`.
 - Skill metadata no longer requires a direct provider key.
 - It is OpenClaw-backend-first by default.
 - Entry script: `skill/scripts/run_triage.py`
+- Source enrollment CLI: `skill/scripts/enroll.py`
 
 ### Enable Daily Morning Push
 
@@ -91,14 +94,42 @@ python3 skill/scripts/setup_daily_cron.py \
   --tz "Europe/London"
 ```
 
+This cron job first syncs enrolled sources, rebuilds `local_kb/local_manifest.json`, then runs batch triage and announces a compact digest.
+
+Target WhatsApp directly:
+
+```bash
+python3 skill/scripts/setup_daily_cron.py \
+  --project-root /path/to/hackathon-research-agent \
+  --whatsapp +447700900123
+```
+
 Check cron jobs:
 
 ```bash
 openclaw cron list
 ```
 
+## Source Enrollment
+
+Track local research context without hand-editing the manifest:
+
+```bash
+python skill/scripts/enroll.py enroll overleaf "My Paper" --url https://git.overleaf.com/abc123 --token ol_xxx
+python skill/scripts/enroll.py enroll github "Auction Repo" --url https://github.com/user/repo
+python skill/scripts/enroll.py enroll local "Drafts" --path /home/user/research/drafts
+python skill/scripts/enroll.py sources
+python skill/scripts/enroll.py sync
+```
+
+Supported connectors:
+
+- `overleaf` via Git mirror URL and token
+- `github` via repository clone/pull
+- `local` via recursive file scan of `.tex`, `.bib`, `.md`, and `.py`
+
 ## Future Extensions
 
 - Scheduled monitoring for new category papers
-- WhatsApp/Telegram push summaries
+- Telegram push summaries
 - Additional read-decision factors (impact, recency, venue quality, etc.)

@@ -30,6 +30,7 @@ batch_output/
 DISCUSSION_*.md
 DISCUSSION_*.jsonl
 skill/memory/seen.json
+skill/memory/sources.json
 
 # OS
 .DS_Store
