@@ -4,6 +4,8 @@ Reference: https://api.semanticscholar.org/api-docs/
 """
 
 import os
+from collections.abc import Sequence
+from typing import cast
 
 import httpx
 
@@ -31,7 +33,7 @@ class SemanticScholarClient:
         )
         self._owns_client = client is None
 
-    async def get_paper_by_arxiv_id(self, arxiv_id: str) -> dict | None:
+    async def get_paper_by_arxiv_id(self, arxiv_id: str) -> dict[str, object] | None:
         """Look up a paper on Semantic Scholar by its arXiv ID.
 
         Args:
@@ -47,7 +49,7 @@ class SemanticScholarClient:
         if response.status_code == 404:
             return None
         response.raise_for_status()
-        return response.json()
+        return _response_json_dict(response)
 
     async def get_citations(
         self,
@@ -68,11 +70,10 @@ class SemanticScholarClient:
             params={"fields": SEARCH_FIELDS, "limit": str(limit)},
         )
         response.raise_for_status()
-        data = response.json()
+        data = _response_json_dict(response)
         return [
-            _s2_to_related_paper(cite["citingPaper"])
-            for cite in data.get("data", [])
-            if cite.get("citingPaper", {}).get("title")
+            _s2_to_related_paper(citing_paper)
+            for citing_paper in _paper_dicts(data.get("data"), "citingPaper")
         ]
 
     async def get_references(
@@ -94,11 +95,10 @@ class SemanticScholarClient:
             params={"fields": SEARCH_FIELDS, "limit": str(limit)},
         )
         response.raise_for_status()
-        data = response.json()
+        data = _response_json_dict(response)
         return [
-            _s2_to_related_paper(ref["citedPaper"])
-            for ref in data.get("data", [])
-            if ref.get("citedPaper", {}).get("title")
+            _s2_to_related_paper(cited_paper)
+            for cited_paper in _paper_dicts(data.get("data"), "citedPaper")
         ]
 
     async def search_similar(
@@ -124,11 +124,10 @@ class SemanticScholarClient:
             },
         )
         response.raise_for_status()
-        data = response.json()
+        data = _response_json_dict(response)
         return [
             _s2_to_related_paper(paper)
-            for paper in data.get("data", [])
-            if paper.get("title")
+            for paper in _paper_dicts(data.get("data"))
         ]
 
     async def close(self) -> None:
@@ -143,17 +142,62 @@ class SemanticScholarClient:
         await self.close()
 
 
-def _s2_to_related_paper(data: dict) -> RelatedPaper:
-    """Convert a Semantic Scholar paper dict to a RelatedPaper model."""
-    authors_list = data.get("authors", [])
-    author_str = ", ".join(a.get("name", "") for a in authors_list[:3])
-    if len(authors_list) > 3:
-        author_str += " et al."
+def _response_json_dict(response: httpx.Response) -> dict[str, object]:
+    payload = response.json()
+    if isinstance(payload, dict):
+        return cast(dict[str, object], payload)
+    return {}
 
+
+def _paper_dicts(items: object, nested_key: str | None = None) -> list[dict[str, object]]:
+    if not isinstance(items, Sequence) or isinstance(items, str | bytes):
+        return []
+
+    papers: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        paper = item.get(nested_key) if nested_key is not None else item
+        if not isinstance(paper, dict):
+            continue
+        title = paper.get("title")
+        if isinstance(title, str) and title:
+            papers.append(cast(dict[str, object], paper))
+    return papers
+
+
+def _authors_to_string(authors: object) -> str:
+    if not isinstance(authors, Sequence) or isinstance(authors, str | bytes):
+        return ""
+
+    names: list[str] = []
+    for author in authors[:3]:
+        if not isinstance(author, dict):
+            continue
+        name = author.get("name")
+        if isinstance(name, str) and name:
+            names.append(name)
+
+    author_str = ", ".join(names)
+    if len(authors) > 3 and author_str:
+        author_str += " et al."
+    return author_str
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+def _optional_str(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def _s2_to_related_paper(data: dict[str, object]) -> RelatedPaper:
+    """Convert a Semantic Scholar paper dict to a RelatedPaper model."""
     return RelatedPaper(
-        title=data.get("title", ""),
-        authors=author_str,
-        year=data.get("year"),
-        url=data.get("url", ""),
-        citation_count=data.get("citationCount"),
+        title=_optional_str(data.get("title")),
+        authors=_authors_to_string(data.get("authors")),
+        year=_optional_int(data.get("year")),
+        url=_optional_str(data.get("url")),
+        citation_count=_optional_int(data.get("citationCount")),
     )

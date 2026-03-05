@@ -1,6 +1,5 @@
 """Tests for Pydantic data models."""
 
-from triage_agent.models.paper import PaperCard
 from triage_agent.models.memo import (
     BreakPoint,
     MethodCritique,
@@ -9,6 +8,7 @@ from triage_agent.models.memo import (
     Relevance,
     TriageMemo,
 )
+from triage_agent.models.paper import PaperCard
 
 
 def test_paper_card_basic() -> None:

@@ -13,6 +13,8 @@ def render_markdown(memo: TriageMemo) -> str:
         A Markdown string ready for display or saving to file.
     """
     sections: list[str] = []
+    novelty_report = memo.novelty_report
+    local_overlap = memo.local_overlap
 
     # Header
     sections.append(f"# Triage Memo: {memo.title}")
@@ -42,50 +44,48 @@ def render_markdown(memo: TriageMemo) -> str:
     sections.append("")
 
     # Novelty report (score + novel contributions only; overlap goes below)
-    if memo.novelty_report:
-        nr = memo.novelty_report
+    if novelty_report is not None:
         sections.append("## Novelty Assessment")
-        sections.append(f"**Novelty Score:** {nr.novelty_score:.1f} / 1.0")
+        sections.append(f"**Novelty Score:** {novelty_report.novelty_score:.1f} / 1.0")
         sections.append("")
-        if nr.novel_contributions:
+        if novelty_report.novel_contributions:
             sections.append("### Novel Contributions")
-            for c in nr.novel_contributions:
+            for c in novelty_report.novel_contributions:
                 sections.append(f"- {c}")
             sections.append("")
 
     # Overlap analysis: public prior art (S2) + your working papers (local)
-    has_public = (
-        memo.novelty_report
-        and (memo.novelty_report.overlap_notes or memo.novelty_report.closest_prior_art)
+    has_public = novelty_report is not None and (
+        bool(novelty_report.overlap_notes) or bool(novelty_report.closest_prior_art)
     )
-    has_local = memo.local_overlap and (
-        memo.local_overlap.matches or memo.local_overlap.overall_relevance > 0
+    has_local = local_overlap is not None and (
+        bool(local_overlap.matches) or local_overlap.overall_relevance > 0
     )
     if has_public or has_local:
         sections.append("## Overlap Analysis")
         sections.append("")
 
-        if has_public:
-            nr = memo.novelty_report
+        if novelty_report is not None and has_public:
             sections.append("### vs. public prior art (S2)")
-            if nr.overlap_notes:
-                sections.append(nr.overlap_notes)
+            if novelty_report.overlap_notes:
+                sections.append(novelty_report.overlap_notes)
                 sections.append("")
-            if nr.closest_prior_art:
+            if novelty_report.closest_prior_art:
                 sections.append("Closest prior art:")
-                for p in nr.closest_prior_art:
+                for p in novelty_report.closest_prior_art:
                     year_str = f" ({p.year})" if p.year else ""
                     cite_str = f" — {p.citation_count} citations" if p.citation_count else ""
                     sections.append(f"- {p.title}{year_str} — {p.authors}{cite_str}")
                 sections.append("")
             sections.append("")
 
-        if has_local:
-            lo = memo.local_overlap
+        if local_overlap is not None and has_local:
             sections.append("### vs. your working papers (local)")
-            sections.append(f"**Overall relevance to your drafts:** {lo.overall_relevance:.1f} / 1.0")
+            sections.append(
+                f"**Overall relevance to your drafts:** {local_overlap.overall_relevance:.1f} / 1.0"
+            )
             sections.append("")
-            for m in lo.matches:
+            for m in local_overlap.matches:
                 sections.append(f"- **{m.local_title}** (id: {m.local_id}, relevance: {m.relevance:.1f})")
                 sections.append(f"  {m.overlap_summary}")
             sections.append("")
