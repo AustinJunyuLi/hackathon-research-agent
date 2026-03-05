@@ -41,63 +41,53 @@ def render_markdown(memo: TriageMemo) -> str:
     sections.append(memo.abstract)
     sections.append("")
 
-    # Method critique
-    if memo.method_critique:
-        mc = memo.method_critique
-        sections.append("## Methodology Critique")
-        sections.append(mc.summary)
-        sections.append("")
-
-        if mc.strengths:
-            sections.append("### Strengths")
-            for s in mc.strengths:
-                sections.append(f"- {s}")
-            sections.append("")
-
-        if mc.break_points:
-            sections.append("### Break Points")
-            for bp in mc.break_points:
-                severity_icon = {"critical": "[!]", "major": "[*]", "minor": "[-]"}.get(
-                    bp.severity, "[ ]"
-                )
-                location = f" ({bp.location})" if bp.location else ""
-                sections.append(f"- {severity_icon} **{bp.severity.upper()}**{location}: {bp.description}")
-            sections.append("")
-
-        if mc.assumptions:
-            sections.append("### Key Assumptions")
-            for a in mc.assumptions:
-                sections.append(f"- {a}")
-            sections.append("")
-
-        if mc.verdict:
-            sections.append(f"**Verdict:** {mc.verdict}")
-            sections.append("")
-
-    # Novelty report
+    # Novelty report (score + novel contributions only; overlap goes below)
     if memo.novelty_report:
         nr = memo.novelty_report
         sections.append("## Novelty Assessment")
         sections.append(f"**Novelty Score:** {nr.novelty_score:.1f} / 1.0")
         sections.append("")
-
         if nr.novel_contributions:
             sections.append("### Novel Contributions")
             for c in nr.novel_contributions:
                 sections.append(f"- {c}")
             sections.append("")
 
-        if nr.overlap_notes:
-            sections.append("### Overlap with Prior Work")
-            sections.append(nr.overlap_notes)
+    # Overlap analysis: public prior art (S2) + your working papers (local)
+    has_public = (
+        memo.novelty_report
+        and (memo.novelty_report.overlap_notes or memo.novelty_report.closest_prior_art)
+    )
+    has_local = memo.local_overlap and (
+        memo.local_overlap.matches or memo.local_overlap.overall_relevance > 0
+    )
+    if has_public or has_local:
+        sections.append("## Overlap Analysis")
+        sections.append("")
+
+        if has_public:
+            nr = memo.novelty_report
+            sections.append("### vs. public prior art (S2)")
+            if nr.overlap_notes:
+                sections.append(nr.overlap_notes)
+                sections.append("")
+            if nr.closest_prior_art:
+                sections.append("Closest prior art:")
+                for p in nr.closest_prior_art:
+                    year_str = f" ({p.year})" if p.year else ""
+                    cite_str = f" — {p.citation_count} citations" if p.citation_count else ""
+                    sections.append(f"- {p.title}{year_str} — {p.authors}{cite_str}")
+                sections.append("")
             sections.append("")
 
-        if nr.closest_prior_art:
-            sections.append("### Closest Prior Art")
-            for p in nr.closest_prior_art:
-                year_str = f" ({p.year})" if p.year else ""
-                cite_str = f" [{p.citation_count} citations]" if p.citation_count else ""
-                sections.append(f"- {p.title}{year_str} — {p.authors}{cite_str}")
+        if has_local:
+            lo = memo.local_overlap
+            sections.append("### vs. your working papers (local)")
+            sections.append(f"**Overall relevance to your drafts:** {lo.overall_relevance:.1f} / 1.0")
+            sections.append("")
+            for m in lo.matches:
+                sections.append(f"- **{m.local_title}** (id: {m.local_id}, relevance: {m.relevance:.1f})")
+                sections.append(f"  {m.overlap_summary}")
             sections.append("")
 
     # Related papers

@@ -1,0 +1,83 @@
+"""Local knowledge base loading utilities.
+
+This module loads locally-authored paper drafts / notes from a JSON manifest,
+so that downstream agents can compare incoming papers against the user's
+current work and interests.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field, ValidationError
+
+
+class LocalPaper(BaseModel):
+    """A locally-authored or tracked paper/draft."""
+
+    id: str = Field(description="Local identifier for the paper/draft")
+    title: str = Field(description="Title of the local paper/draft")
+    abstract: str = Field(description="Short description or abstract")
+
+
+class LocalManifest(BaseModel):
+    """Manifest of local papers/drafts."""
+
+    papers: list[LocalPaper] = Field(
+        default_factory=list,
+        description="List of local papers/drafts to compare against",
+    )
+
+
+def _default_manifest_path() -> Path:
+    """Compute the default path to the local manifest JSON file.
+
+    Resolution order:
+    1. LOCAL_MANIFEST_PATH env var, if set
+    2. LOCAL_KB_DIR/local_manifest.json, if LOCAL_KB_DIR is set
+    3. ./local_kb/local_manifest.json (relative to CWD)
+    """
+    env_path = os.getenv("LOCAL_MANIFEST_PATH")
+    if env_path:
+        return Path(env_path)
+
+    kb_dir = os.getenv("LOCAL_KB_DIR")
+    if kb_dir:
+        return Path(kb_dir) / "local_manifest.json"
+
+    return Path("./local_kb/local_manifest.json")
+
+
+def load_local_manifest(path: str | Path | None = None) -> LocalManifest | None:
+    """Load the local manifest JSON describing user's own drafts/papers.
+
+    Args:
+        path: Optional explicit path to the manifest JSON file. If not
+            provided, a default is resolved via environment variables.
+
+    Returns:
+        A LocalManifest instance if the file exists and is valid, otherwise
+        None (in which case callers should gracefully fall back to
+        "no local knowledge available").
+    """
+    manifest_path = Path(path) if path is not None else _default_manifest_path()
+
+    if not manifest_path.exists():
+        return None
+
+    try:
+        raw: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        # If the manifest is invalid JSON, treat as absent to avoid
+        # breaking the main triage flow.
+        return None
+
+    try:
+        return LocalManifest.model_validate(raw)
+    except ValidationError:
+        # Invalid schema; ignore rather than raising in the main path.
+        return None
+

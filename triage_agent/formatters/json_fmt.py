@@ -12,4 +12,5 @@ def render_json(memo: TriageMemo) -> str:
     Returns:
         A JSON string with indentation.
     """
-    return memo.model_dump_json(indent=2)
+    # Exclude fields that are unset/None (e.g. deprecated method_critique)
+    return memo.model_dump_json(indent=2, exclude_none=True)

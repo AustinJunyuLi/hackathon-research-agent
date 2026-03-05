@@ -80,6 +80,36 @@ class NoveltyReport(BaseModel):
     )
 
 
+class LocalOverlapMatch(BaseModel):
+    """A match between the target paper and a local draft/paper."""
+
+    local_id: str = Field(description="ID of the local paper/draft from the manifest")
+    local_title: str = Field(description="Title of the local paper/draft")
+    relevance: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="How relevant this target paper is to the local draft (0.0–1.0)",
+    )
+    overlap_summary: str = Field(
+        description="Short natural-language summary of how this paper overlaps with the local draft",
+    )
+
+
+class LocalOverlapReport(BaseModel):
+    """Overlap between the target paper and the user's local drafts/papers."""
+
+    matches: list[LocalOverlapMatch] = Field(
+        default_factory=list,
+        description="Per-local-paper overlap and relevance assessments",
+    )
+    overall_relevance: float = Field(
+        ge=0.0,
+        le=1.0,
+        default=0.0,
+        description="Overall relevance of the target paper to the user's local work (0.0–1.0)",
+    )
+
+
 class TriageMemo(BaseModel):
     """The final structured output: a complete Triage Memo for one paper.
 
@@ -107,6 +137,10 @@ class TriageMemo(BaseModel):
     related_papers: list[RelatedPaper] = Field(
         default_factory=list,
         description="Related papers from Retriever agent",
+    )
+    local_overlap: LocalOverlapReport | None = Field(
+        default=None,
+        description="Overlap with user's local drafts (from Local Overlap agent)",
     )
     read_decision: str = Field(
         default="",

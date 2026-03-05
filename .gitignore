@@ -23,6 +23,8 @@ env/
 
 # Output
 output/
+out/
+batch_output/
 
 # OS
 .DS_Store

@@ -6,10 +6,16 @@ This agent combines Semantic Scholar data with LLM analysis to determine:
 3. Which prior papers overlap most
 """
 
+import logging
+
 from triage_agent.agents.base import BaseAgent
 from triage_agent.api.semantic_scholar import SemanticScholarClient
 from triage_agent.models.memo import NoveltyReport, RelatedPaper
 from triage_agent.models.paper import PaperCard
+from triage_agent.utils.llm import call_llm_json
+
+
+logger = logging.getLogger(__name__)
 
 NOVELTY_SYSTEM_PROMPT = """\
 You are a research novelty assessor. Given a target paper's abstract and a list of
@@ -72,30 +78,75 @@ class NoveltyCheckerAgent(BaseAgent):
                     paper.title,
                     limit=self.max_prior_art,
                 )
-        except Exception:
-            pass  # TODO: Log warning, proceed with empty prior art
+        except Exception as exc:  # pragma: no cover - network/pathological errors
+            # If Semantic Scholar is unavailable, proceed with empty prior art,
+            # but record a warning so users can diagnose missing prior art.
+            logger.warning(
+                "Semantic Scholar search_similar failed for '%s': %s",
+                paper.title,
+                exc,
+            )
+            prior_art = []
 
         # Step 2: Use LLM to assess novelty
-        # TODO: Implement LLM call
-        #
-        # Implementation plan:
-        # 1. Format prior art into a readable list for the prompt
-        # 2. Call LLM with NOVELTY_SYSTEM_PROMPT and NOVELTY_USER_PROMPT
-        # 3. Parse structured response into NoveltyReport fields
-        #
-        # For now, suppress unused variable warnings and return placeholder
-        _ = NOVELTY_SYSTEM_PROMPT
-        _ = NOVELTY_USER_PROMPT.format(
+        prior_art_list = "\n".join(
+            f"- {p.title} ({p.authors}, {p.year or 'n.d.'})" for p in prior_art
+        ) or "(No prior art found)"
+
+        user_prompt = NOVELTY_USER_PROMPT.format(
             title=paper.title,
             abstract=paper.abstract,
-            prior_art_list="\n".join(
-                f"- {p.title} ({p.authors}, {p.year})" for p in prior_art
-            ) or "(No prior art found)",
+            prior_art_list=prior_art_list,
         )
 
-        return NoveltyReport(
-            novelty_score=0.5,  # TODO: LLM-determined score
-            closest_prior_art=prior_art,
-            novel_contributions=["TODO: LLM-identified novel contributions"],
-            overlap_notes="TODO: LLM-generated overlap analysis",
-        )
+        # We explicitly use an OpenAI model here so that providing only
+        # OPENAI_API_KEY is sufficient, regardless of the global LLM_MODEL
+        # default (which may point at Anthropic).
+        try:
+            llm_response = await call_llm_json(
+                system_prompt=NOVELTY_SYSTEM_PROMPT,
+                user_prompt=(
+                    user_prompt
+                    + "\n\nReturn a JSON object with keys "
+                    "'novelty_score' (float 0-1), "
+                    "'novel_contributions' (list of strings), "
+                    "and 'overlap_notes' (string)."
+                ),
+                model="gpt-4o-mini",
+            )
+
+            raw_score = float(llm_response.get("novelty_score", 0.5))
+            # Clamp into [0.0, 1.0] to satisfy the Pydantic constraints.
+            novelty_score = max(0.0, min(1.0, raw_score))
+
+            contributions = llm_response.get("novel_contributions", [])
+            if isinstance(contributions, str):
+                contributions = [contributions]
+            if not isinstance(contributions, list):
+                contributions = []
+
+            overlap_notes = llm_response.get("overlap_notes", "")
+            if not isinstance(overlap_notes, str):
+                overlap_notes = str(overlap_notes)
+
+            return NoveltyReport(
+                novelty_score=novelty_score,
+                closest_prior_art=prior_art,
+                novel_contributions=contributions,
+                overlap_notes=overlap_notes,
+            )
+        except Exception as exc:  # pragma: no cover - network/pathological errors
+            # On any LLM failure, fall back to a neutral report but still
+            # include the discovered prior art so downstream consumers have
+            # something to work with.
+            logger.warning(
+                "LLM novelty assessment failed for '%s': %s",
+                paper.title,
+                exc,
+            )
+            return NoveltyReport(
+                novelty_score=0.5,
+                closest_prior_art=prior_art,
+                novel_contributions=[],
+                overlap_notes="Novelty assessment unavailable due to LLM error.",
+            )

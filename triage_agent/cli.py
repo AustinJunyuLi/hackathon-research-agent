@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -11,18 +12,76 @@ from rich.markdown import Markdown
 
 from triage_agent.api.arxiv import extract_arxiv_id
 from triage_agent.formatters import render_json, render_markdown
+from triage_agent.models.memo import TriageMemo
 from triage_agent.orchestrator import run_triage
 
 console = Console()
 
 
-async def run_batch(batch_file: str, output_format: str, output_dir: str | None) -> None:
-    """Run triage on a batch of arXiv IDs/URLs listed in a file.
+def _build_summary(memos: list[tuple[str, TriageMemo]]) -> list[dict]:
+    """Build summary list for batch: one_line_summary, read_decision, scores, local links."""
+    out: list[dict] = []
+    for arxiv_id, memo in memos:
+        novelty_score = 0.0
+        if memo.novelty_report is not None:
+            novelty_score = memo.novelty_report.novelty_score
 
-    Args:
-        batch_file: Path to a text file with one arXiv ID/URL per line.
-        output_format: "markdown" or "json".
-        output_dir: Directory to write outputs (defaults to ./batch_output).
+        local_relevance = 0.0
+        local_related: list[dict] = []
+        if memo.local_overlap is not None:
+            local_relevance = memo.local_overlap.overall_relevance
+            local_related = [
+                {"local_id": m.local_id, "local_title": m.local_title}
+                for m in memo.local_overlap.matches
+            ]
+
+        out.append(
+            {
+                "arxiv_id": arxiv_id,
+                "title": memo.title,
+                "summary": memo.one_line_summary,
+                "read_decision": memo.read_decision,
+                "novelty_score": round(novelty_score, 2),
+                "relevance": memo.relevance.value,
+                "local_relevance": round(local_relevance, 2),
+                "local_related": local_related,
+            }
+        )
+    return out
+
+
+def _render_summary_md(summaries: list[dict]) -> str:
+    """Render summary as Markdown table."""
+    lines = [
+        "# Batch Triage Summary",
+        "",
+        "| arXiv ID | Title | Summary | 可不可读 | 创新性 | 相关性 | 本地相关性 | 相关本地文章 |",
+        "|----------|-------|---------|----------|--------|--------|------------|--------------|",
+    ]
+    for s in summaries:
+        title_short = (s["title"][:40] + "…") if len(s["title"]) > 40 else s["title"]
+        summary_short = (
+            (s.get("summary") or "")[:60] + "…"
+            if len(s.get("summary") or "") > 60
+            else (s.get("summary") or "")
+        )
+        local_str = ", ".join(
+            f"{x['local_id']}" for x in s["local_related"]
+        ) or "—"
+        lines.append(
+            f"| {s['arxiv_id']} | {title_short} | {summary_short} | {s['read_decision']} | "
+            f"{s['novelty_score']} | {s['relevance']} | {s['local_relevance']} | {local_str} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+async def run_batch(batch_file: str, output_format: str, output_dir: str | None) -> None:
+    """Run triage on a batch: one full output per paper + one summary file.
+
+    - Writes one file per paper (e.g. 1406.2661.json / .md) with full memo.
+    - Writes batch_summary.json and batch_summary.md: for each paper only
+      read_decision, novelty_score, relevance, local_relevance, local_related.
     """
     path = Path(batch_file)
     if not path.exists():
@@ -38,39 +97,47 @@ async def run_batch(batch_file: str, output_format: str, output_dir: str | None)
     out_dir = Path(output_dir) if output_dir else Path("./batch_output")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Limit concurrency to avoid overwhelming external APIs.
     semaphore = asyncio.Semaphore(5)
 
-    async def _process_one(arxiv_input: str) -> None:
+    async def _process_one(arxiv_input: str) -> tuple[str | None, TriageMemo | None]:
         async with semaphore:
             try:
                 memo = await run_triage(arxiv_input)
+                try:
+                    aid = extract_arxiv_id(arxiv_input)
+                except ValueError:
+                    aid = arxiv_input.replace("/", "_").replace(":", "_").replace(" ", "_")
+                console.print(f"[green]Done:[/green] {aid}")
+                return (aid, memo)
             except Exception as e:
                 console.print(f"[red]Error processing {arxiv_input}:[/red] {e}")
-                return
+                return (None, None)
 
-            if output_format == "json":
-                content = render_json(memo)
-                ext = "json"
-            else:
-                content = render_markdown(memo)
-                ext = "md"
+    results = await asyncio.gather(*(_process_one(i) for i in inputs))
+    memos = [(aid, m) for aid, m in results if aid is not None and m is not None]
+    if not memos:
+        console.print("[yellow]No memos to write.[/yellow]")
+        return
 
-            try:
-                arxiv_id = extract_arxiv_id(arxiv_input)
-            except ValueError:
-                safe = (
-                    arxiv_input.replace("/", "_")
-                    .replace(":", "_")
-                    .replace(" ", "_")
-                )
-                arxiv_id = safe
+    ext = "json" if output_format == "json" else "md"
+    for arxiv_id, memo in memos:
+        if output_format == "json":
+            content = render_json(memo)
+        else:
+            content = render_markdown(memo)
+        out_path = out_dir / f"{arxiv_id}.{ext}"
+        out_path.write_text(content, encoding="utf-8")
+    console.print(f"[green]Per-paper outputs:[/green] {len(memos)} files in {out_dir}")
 
-            out_path = out_dir / f"{arxiv_id}.{ext}"
-            out_path.write_text(content, encoding="utf-8")
-            console.print(f"[green]Memo written for {arxiv_id}:[/green] {out_path}")
-
-    await asyncio.gather(*(_process_one(i) for i in inputs))
+    # Summary: read_decision, novelty_score, relevance, local_relevance, local_related
+    summaries = _build_summary(memos)
+    summary_json_path = out_dir / "batch_summary.json"
+    summary_json_path.write_text(
+        json.dumps(summaries, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    summary_md_path = out_dir / "batch_summary.md"
+    summary_md_path.write_text(_render_summary_md(summaries), encoding="utf-8")
+    console.print(f"[green]Summary written:[/green] {summary_json_path}, {summary_md_path}")
 
 
 def main() -> None:
