@@ -21,20 +21,36 @@ def _build_message(project_root: Path, batch_file: str, output_dir: str) -> str:
         "if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi && "
         f"triage --batch-file {batch_file} --format json --output-dir {output_dir}\n"
         f"2) Read {output_dir}/batch_summary.json\n"
-        "3) Reply with a concise digest (max 8 bullets), prioritizing high relevance, then medium.\n"
-        "Each bullet: arxiv_id | short title | read_decision | relevance | novelty_score | local_relevance.\n"
+        "3) Reply with a concise digest (max 8 bullets), "
+        "prioritizing high relevance, then medium.\n"
+        "Group the digest by read_decision using READ IN FULL, SKIM, and SKIP headings.\n"
+        "Each bullet: arxiv_id | short title | read_decision | "
+        "relevance | novelty_score | local_relevance.\n"
+        "4) Format the results for WhatsApp: keep it compact and "
+        "include a paper ID for drill-down.\n"
         "If no valid/new items, explicitly say so."
     )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Install daily OpenClaw cron for research-agent")
+    parser = argparse.ArgumentParser(
+        description="Install daily OpenClaw cron for research-agent"
+    )
     parser.add_argument("--name", default="research-agent-daily")
-    parser.add_argument("--cron", default="0 8 * * *", help='Cron expression (default: "0 8 * * *")')
+    parser.add_argument(
+        "--cron",
+        default="0 8 * * *",
+        help='Cron expression (default: "0 8 * * *")',
+    )
     parser.add_argument("--tz", default="Europe/London", help="IANA timezone")
     parser.add_argument("--agent", default="main")
     parser.add_argument("--channel", default="last", help="Delivery channel for announce")
     parser.add_argument("--to", default="", help="Optional explicit destination")
+    parser.add_argument(
+        "--whatsapp",
+        default="",
+        help="Convenience target for WhatsApp delivery; sets --channel whatsapp and --to <E.164>",
+    )
     parser.add_argument(
         "--project-root",
         default="",
@@ -53,7 +69,13 @@ def main() -> None:
     args = parser.parse_args()
 
     detected_root = Path(__file__).resolve().parents[2]
-    project_root = Path(args.project_root).expanduser().resolve() if args.project_root else detected_root
+    project_root = (
+        Path(args.project_root).expanduser().resolve()
+        if args.project_root
+        else detected_root
+    )
+    channel = "whatsapp" if args.whatsapp else args.channel
+    destination = args.whatsapp or args.to
 
     message = _build_message(project_root, args.batch_file, args.output_dir)
 
@@ -75,13 +97,13 @@ def main() -> None:
         "isolated",
         "--announce",
         "--channel",
-        args.channel,
+        channel,
         "--message",
         message,
         "--json",
     ]
-    if args.to:
-        cmd.extend(["--to", args.to])
+    if destination:
+        cmd.extend(["--to", destination])
 
     completed = subprocess.run(cmd, check=True, capture_output=True, text=True)
     data = json.loads(completed.stdout)

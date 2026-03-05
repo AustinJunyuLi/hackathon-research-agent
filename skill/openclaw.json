@@ -9,7 +9,7 @@
         "expression": "0 8 * * *"
       },
       "execution": "isolated",
-      "task": "Read ids.txt in the project root. Run batch triage for all valid IDs/URLs. Produce per-paper outputs and a compact daily digest from batch_summary (focus on high relevance first, then medium). If there are no new/valid items, report that clearly.",
+      "task": "Read ids.txt in the project root. Run batch triage for all valid IDs/URLs. Produce per-paper outputs and a compact daily digest from batch_summary grouped by read_decision (READ IN FULL, SKIM, SKIP). Focus on high relevance first, then medium, and include a paper ID for drill-down. Keep the message suitable for Discord or WhatsApp. If there are no new/valid items, report that clearly.",
       "delivery": {
         "method": "announce",
         "channel": "last"

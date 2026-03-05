@@ -55,16 +55,19 @@ Setup helper:
 python3 scripts/setup_daily_cron.py \
   --project-root /path/to/hackathon-research-agent \
   --cron "0 8 * * *" \
-  --tz "Europe/London"
+  --tz "Europe/London" \
+  --whatsapp +447700900123
 ```
 
 This installs a daily isolated cron job that runs batch triage and announces a compact digest.
+Use `--whatsapp <E.164>` to target WhatsApp directly; otherwise the job announces to the last-used channel.
 
 ## Scripts
 
 Python modules in `scripts/`:
 - `run_triage.py` — skill entrypoint
 - `setup_daily_cron.py` — install daily OpenClaw cron job
+- `format_whatsapp.py` — render `batch_summary.json` into a compact chat digest
 
 ## Memory
 
