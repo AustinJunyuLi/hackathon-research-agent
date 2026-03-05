@@ -99,9 +99,8 @@ class NoveltyCheckerAgent(BaseAgent):
             prior_art_list=prior_art_list,
         )
 
-        # We explicitly use an OpenAI model here so that providing only
-        # OPENAI_API_KEY is sufficient, regardless of the global LLM_MODEL
-        # default (which may point at Anthropic).
+        # LLM backend is selected centrally in utils/llm.py (provider keys
+        # when available; OpenClaw runtime fallback otherwise).
         try:
             llm_response = await call_llm_json(
                 system_prompt=NOVELTY_SYSTEM_PROMPT,
@@ -112,7 +111,6 @@ class NoveltyCheckerAgent(BaseAgent):
                     "'novel_contributions' (list of strings), "
                     "and 'overlap_notes' (string)."
                 ),
-                model="gpt-4o-mini",
             )
 
             raw_score = float(llm_response.get("novelty_score", 0.5))

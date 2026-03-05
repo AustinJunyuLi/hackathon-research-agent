@@ -92,7 +92,6 @@ class LocalOverlapAgent(BaseAgent):
             raw: dict[str, Any] = await call_llm_json(
                 system_prompt=LOCAL_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
-                model="gpt-4o-mini",
             )
         except Exception as exc:  # pragma: no cover - network/pathological errors
             logger.warning(

@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +17,15 @@ from triage_agent.models.memo import TriageMemo
 from triage_agent.orchestrator import run_triage
 
 console = Console()
+
+
+def _bootstrap_default_paths() -> None:
+    """Set best-effort defaults so local_kb works outside repo CWD."""
+    project_root = Path(__file__).resolve().parent.parent
+    local_manifest = project_root / "local_kb" / "local_manifest.json"
+    if local_manifest.exists():
+        os.environ.setdefault("TRIAGE_PROJECT_ROOT", str(project_root))
+        os.environ.setdefault("LOCAL_MANIFEST_PATH", str(local_manifest))
 
 
 def _build_summary(memos: list[tuple[str, TriageMemo]]) -> list[dict]:
@@ -143,6 +153,7 @@ async def run_batch(batch_file: str, output_format: str, output_dir: str | None)
 def main() -> None:
     """Main CLI entry point."""
     load_dotenv()
+    _bootstrap_default_paths()
 
     parser = argparse.ArgumentParser(
         prog="triage",

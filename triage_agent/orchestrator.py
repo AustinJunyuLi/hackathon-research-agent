@@ -88,7 +88,6 @@ async def _assemble_memo_fields(
         raw: dict[str, Any] = await call_llm_json(
             system_prompt=ASSEMBLER_SYSTEM_PROMPT,
             user_prompt=user_prompt,
-            model="gpt-4o-mini",
         )
     except Exception as exc:
         logger.warning("Assembler LLM call failed for '%s': %s", paper.title, exc)

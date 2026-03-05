@@ -1,82 +1,81 @@
 ---
 name: research-agent
-description: "AI-powered research paper triage — fetches arXiv papers, runs multi-agent critique (retriever, critic, novelty checker), delivers structured triage memos via Telegram/WhatsApp"
+description: "AI-powered research paper triage — fetches arXiv papers, runs retriever+novelty+local-overlap analysis, and outputs structured memo + batch summary"
 user-invocable: true
 metadata:
   openclaw:
     emoji: "\U0001F52C"
     requires:
-      bins: [python3]
-      env: [ANTHROPIC_API_KEY]
+      bins: [python3, openclaw, triage]
 ---
 
 # Research Paper Triage Agent
 
-You are a research paper triage agent. When the user provides an arXiv paper URL or ID, you analyze it and produce a structured Triage Memo.
+You are a research paper triage agent. When the user provides an arXiv paper URL or ID, analyze it and produce a structured Triage Memo.
 
 ## Workflow
 
-1. **Parse input** — Extract the arXiv ID from a URL or bare ID string
-2. **Fetch metadata** — Use the arXiv API to get the paper's title, authors, abstract, and categories (abstract-only, NO PDF parsing)
-3. **Spawn sub-agents** in parallel:
-   - **Retriever** — Find related papers via Semantic Scholar (citations, references, similar papers)
-   - **Critic** — Analyze methodology, identify break points and key assumptions
-   - **Novelty Checker** — Assess novelty against closest prior art
-4. **Assemble Triage Memo** — Combine all results into a structured memo
-5. **Deliver** — Present the memo to the user in markdown format
+1. **Parse input** — Extract arXiv ID from URL or bare ID string.
+2. **Fetch metadata** — Query arXiv API for title/authors/abstract/categories (abstract-only; no PDF parsing).
+3. **Run sub-agents in parallel**:
+   - **Retriever** — Semantic Scholar citations/references/similar papers.
+   - **Novelty Checker** — Novelty score + prior-art overlap.
+   - **Local Overlap** — Compare against `local_kb/local_manifest.json` drafts.
+4. **Assemble memo** — Produce one-line summary, key claims, relevance, read decision.
+5. **Output**:
+   - Per-paper full memo (`.json` or `.md`)
+   - Batch summary (`batch_summary.json` + `batch_summary.md`)
 
-## Sub-agent Tasks
+## Output Fields (batch summary)
 
-### Retriever Agent
-Search Semantic Scholar for:
-- Forward citations (papers that cite this one)
-- Backward references (papers this one cites)
-- Semantically similar papers (by title/abstract)
+For each paper include:
+- `arxiv_id`
+- `title`
+- `summary`
+- `read_decision`
+- `novelty_score`
+- `relevance`
+- `local_relevance`
+- `local_related`
 
-Deduplicate results and sort by citation count.
+## Runtime Notes
 
-### Critic Agent
-Analyze the paper's methodology based on the abstract:
-- Summarize the methodology in one paragraph
-- Identify strengths
-- Identify break points (weaknesses) with severity ratings (critical/major/minor)
-- List key assumptions the results depend on
-- Provide an overall verdict
+- **Default backend is OpenClaw runtime** (`LLM_BACKEND=openclaw`).
+- Skill can run without direct OpenAI/Anthropic key env vars when OpenClaw is available.
+- Direct provider keys remain optional overrides for standalone CLI usage.
+- Semantic Scholar may return rate limits without `SEMANTIC_SCHOLAR_API_KEY`.
 
-### Novelty Checker Agent
-Assess how novel the paper is:
-- Find closest prior art via Semantic Scholar
-- Score novelty from 0.0 (derivative) to 1.0 (groundbreaking)
-- List genuinely novel contributions
-- Describe overlap with existing work
+## Daily Push Automation
 
-## Output Format
+Morning auto-push is supported via OpenClaw cron.
 
-Present results as a structured Triage Memo with sections:
-- Header (title, authors, arXiv link, relevance, read decision)
-- One-line summary
-- Key claims
-- Methodology critique (strengths, break points, assumptions)
-- Novelty assessment (score, contributions, prior art)
-- Related papers
-- Read recommendation (read in full / skim / skip / monitor authors)
+Setup helper:
+
+```bash
+python3 scripts/setup_daily_cron.py \
+  --project-root /path/to/hackathon-research-agent \
+  --cron "0 8 * * *" \
+  --tz "Europe/London"
+```
+
+This installs a daily isolated cron job that runs batch triage and announces a compact digest.
 
 ## Scripts
 
-Python modules are available in `scripts/`:
-- `run_triage.py` — Main entry point, call with an arXiv ID
-- Uses the `triage_agent` package installed in the project
+Python modules in `scripts/`:
+- `run_triage.py` — skill entrypoint
+- `setup_daily_cron.py` — install daily OpenClaw cron job
 
 ## Memory
 
-Persistent state stored in `memory/`:
-- `seen.json` — Papers already triaged (avoid duplicates)
-- `profile.json` — User's research interests for relevance scoring
+Persistent state in `memory/`:
+- `seen.json` — paper IDs already triaged
+- `profile.json` — optional research interest profile
 
 ## Commands
 
-```
-/research-agent <arxiv-url-or-id>    # Triage a single paper
-/research-agent batch <id1> <id2>    # Triage multiple papers
-/research-agent interests            # Show/edit research profile
+```text
+/research-agent <arxiv-url-or-id>
+/research-agent batch <id1> <id2>
+/research-agent interests
 ```

@@ -3,18 +3,18 @@
   "cron": [
     {
       "id": "daily-arxiv-scan",
-      "description": "Scan arXiv for new papers matching research interests",
+      "description": "Daily morning paper triage digest",
       "schedule": {
         "type": "cron",
         "expression": "0 8 * * *"
       },
       "execution": "isolated",
-      "task": "Check arXiv for new papers in the categories defined in memory/profile.json. Triage any new papers not in memory/seen.json. Announce summaries of HIGH relevance papers.",
+      "task": "Read ids.txt in the project root. Run batch triage for all valid IDs/URLs. Produce per-paper outputs and a compact daily digest from batch_summary (focus on high relevance first, then medium). If there are no new/valid items, report that clearly.",
       "delivery": {
         "method": "announce",
-        "channel": "research-updates"
+        "channel": "last"
       },
-      "enabled": false
+      "enabled": true
     }
   ]
 }

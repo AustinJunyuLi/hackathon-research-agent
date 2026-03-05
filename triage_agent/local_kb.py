@@ -38,7 +38,9 @@ def _default_manifest_path() -> Path:
     Resolution order:
     1. LOCAL_MANIFEST_PATH env var, if set
     2. LOCAL_KB_DIR/local_manifest.json, if LOCAL_KB_DIR is set
-    3. ./local_kb/local_manifest.json (relative to CWD)
+    3. TRIAGE_PROJECT_ROOT/local_kb/local_manifest.json, if TRIAGE_PROJECT_ROOT is set
+    4. ./local_kb/local_manifest.json (relative to CWD)
+    5. <repo_root>/local_kb/local_manifest.json (best-effort fallback)
     """
     env_path = os.getenv("LOCAL_MANIFEST_PATH")
     if env_path:
@@ -48,7 +50,18 @@ def _default_manifest_path() -> Path:
     if kb_dir:
         return Path(kb_dir) / "local_manifest.json"
 
-    return Path("./local_kb/local_manifest.json")
+    project_root = os.getenv("TRIAGE_PROJECT_ROOT")
+    if project_root:
+        project_candidate = Path(project_root) / "local_kb" / "local_manifest.json"
+        if project_candidate.exists():
+            return project_candidate
+
+    cwd_candidate = Path("./local_kb/local_manifest.json")
+    if cwd_candidate.exists():
+        return cwd_candidate
+
+    repo_candidate = Path(__file__).resolve().parents[1] / "local_kb" / "local_manifest.json"
+    return repo_candidate
 
 
 def load_local_manifest(path: str | Path | None = None) -> LocalManifest | None:
