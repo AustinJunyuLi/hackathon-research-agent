@@ -86,7 +86,9 @@ def render_markdown(memo: TriageMemo) -> str:
             )
             sections.append("")
             for m in local_overlap.matches:
-                sections.append(f"- **{m.local_title}** (id: {m.local_id}, relevance: {m.relevance:.1f})")
+                sections.append(
+                    f"- **{m.local_title}** (id: {m.local_id}, relevance: {m.relevance:.1f})"
+                )
                 sections.append(f"  {m.overlap_summary}")
             sections.append("")
 
