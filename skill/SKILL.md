@@ -66,6 +66,7 @@ Use `--whatsapp <E.164>` to target WhatsApp directly; otherwise the job announce
 
 Python modules in `scripts/`:
 - `run_triage.py` — skill entrypoint
+- `enroll.py` — enroll, list, sync, and remove tracked research sources
 - `setup_daily_cron.py` — install daily OpenClaw cron job
 - `format_whatsapp.py` — render `batch_summary.json` into a compact chat digest
 
@@ -81,4 +82,15 @@ Persistent state in `memory/`:
 /research-agent <arxiv-url-or-id>
 /research-agent batch <id1> <id2>
 /research-agent interests
+```
+
+## Source Enrollment
+
+```text
+/research-agent enroll overleaf "My Paper" --url https://git.overleaf.com/abc123 --token ol_xxx
+/research-agent enroll github "Auction Repo" --url https://github.com/user/repo
+/research-agent enroll local "Drafts" --path /home/user/research/drafts
+/research-agent sources
+/research-agent remove <source-id>
+/research-agent sync
 ```
