@@ -12,12 +12,12 @@
 
 ## What To Demo
 
-1. `/research-agent 2106.09685` in OpenClaw
-2. `python skill/scripts/enroll.py enroll local "Drafts" --path <folder>`
-3. `python skill/scripts/enroll.py sync`
-4. `triage --batch-file ids.txt --format json --output-dir out/demo`
-5. `python skill/scripts/format_whatsapp.py out/demo/batch_summary.json`
-6. `python skill/scripts/setup_daily_cron.py --project-root <repo> --channel discord --to <channel-id>`
+1. `bash scripts/bootstrap_openclaw.sh`
+2. `python scripts/verify_openclaw_install.py`
+3. `openclaw skills info research-agent`
+4. `openclaw agent --agent main --message '/research-agent 2106.09685'`
+5. `bash scripts/smoke_openclaw_install.sh`
+6. `python3 skill/scripts/setup_daily_cron.py --project-root "$(pwd)" --channel discord --to <channel-id>`
 
 ## Submission Copy
 
@@ -27,6 +27,8 @@
 
 The final push adds a source enrollment system that mirrors Overleaf or GitHub repos and scans local research folders to rebuild the local manifest automatically. That keeps relevance judgments grounded in the user's current work instead of a stale hand-maintained file. The result is a demo-ready agent that can operate on a schedule and stay aligned with an active research workflow.
 
+The canonical install and demo path is now repo clone plus OpenClaw bootstrap, verification, and a judge-safe smoke test. That keeps the first-run path public and reproducible before any private GitHub or Overleaf credentials are introduced.
+
 ### Key Features
 
 - OpenClaw-first skill execution with no direct provider key required in the normal path
@@ -35,11 +37,13 @@ The final push adds a source enrollment system that mirrors Overleaf or GitHub r
 - Discord and WhatsApp-friendly summary formatting
 - Source enrollment for Overleaf, GitHub, and local folders
 - Automatic manifest rebuild before triage runs
+- Judge-safe bootstrap and smoke-test flow for installation and demo
 
 ## Assets Checklist
 
 - [ ] GitHub branch pushed
-- [ ] Repo README reflects enrollment + cron flow
+- [ ] Repo README reflects bootstrap + smoke-test flow
+- [ ] `docs/openclaw_quickstart.md` matches the live demo commands
 - [ ] One OpenClaw single-paper screenshot
 - [ ] One digest screenshot or terminal capture
 - [ ] Team member names added
