@@ -1,11 +1,11 @@
 """Data models for the Triage Memo output and sub-agent results."""
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class Relevance(str, Enum):
+class Relevance(StrEnum):
     """How relevant the paper is to the user's research agenda."""
 
     HIGH = "high"
@@ -90,8 +90,19 @@ class LocalOverlapMatch(BaseModel):
         le=1.0,
         description="How relevant this target paper is to the local draft (0.0–1.0)",
     )
+    relationship_type: str = Field(
+        default="related",
+        description=(
+            "Normalized relationship label, e.g. extends_your_work, "
+            "competes_with_your_idea, method_transfer, citation_candidate, "
+            "background_context, same_problem_different_method, or related"
+        ),
+    )
     overlap_summary: str = Field(
-        description="Short natural-language summary of how this paper overlaps with the local draft",
+        description=(
+            "Short natural-language summary of how this paper overlaps "
+            "with the local draft"
+        ),
     )
 
 
@@ -122,6 +133,10 @@ class TriageMemo(BaseModel):
     abstract: str = Field(description="Full abstract")
     relevance: Relevance = Field(description="Relevance to user's research agenda")
     one_line_summary: str = Field(description="One-sentence summary of the paper's contribution")
+    why_this_matters_to_you: str = Field(
+        default="",
+        description="Short personalized explanation of why the paper matters to the user's work",
+    )
     key_claims: list[str] = Field(
         default_factory=list,
         description="Main claims made by the paper",

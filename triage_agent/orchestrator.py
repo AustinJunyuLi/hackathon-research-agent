@@ -3,16 +3,20 @@
 This is the main pipeline: fetch paper -> fan out to agents -> assemble memo.
 """
 
+import asyncio
 import logging
 from typing import Any
-
-import asyncio
 
 from triage_agent.agents.local_overlap import LocalOverlapAgent
 from triage_agent.agents.novelty import NoveltyCheckerAgent
 from triage_agent.agents.retriever import RetrieverAgent
 from triage_agent.api.arxiv import ArxivClient
-from triage_agent.models.memo import LocalOverlapReport, NoveltyReport, Relevance, TriageMemo
+from triage_agent.models.memo import (
+    LocalOverlapReport,
+    NoveltyReport,
+    Relevance,
+    TriageMemo,
+)
 from triage_agent.models.paper import PaperCard
 from triage_agent.utils.llm import call_llm_json
 
@@ -24,12 +28,23 @@ You are a research triage assistant. Given a paper's title and abstract, plus:
 - Relevance to the researcher's local work (their drafts/projects)
 
 Produce:
-1. A one-line summary: what the paper does, what method it uses, what it achieves (1-2 sentences, concise).
-2. Key claims: 3-5 short bullet points of the main claims or contributions.
-3. Relevance: how relevant is this paper to the researcher's own work? One of: high, medium, low, off_topic.
-4. Read decision: should the researcher read it? One of: "read in full", "skim", "skip", "monitor authors".
+1. A one-line summary:
+   what the paper does, what method it uses, what it achieves
+   (1-2 sentences, concise).
+2. Why this matters to the researcher:
+   1-2 sentences grounded in their local work if possible.
+3. Key claims: 3-5 short bullet points of the main claims or contributions.
+4. Relevance:
+   how relevant is this paper to the researcher's own work?
+   One of: high, medium, low, off_topic.
+5. Read decision:
+   should the researcher read it?
+   One of: "read in full", "skim", "skip", "monitor authors".
 
-Consider novelty and local relevance together: high novelty + high local relevance -> read in full; low on both -> skip; etc.
+Consider novelty and local relevance together:
+- high novelty + high local relevance -> read in full
+- low on both -> skip
+- otherwise choose the middle ground appropriately
 """
 
 
@@ -60,8 +75,10 @@ def _assemble_user_prompt(
         parts.append("- No local drafts or no overlap.")
     parts.append("")
     parts.append(
-        'Return a JSON object with keys: "one_line_summary" (string), "key_claims" (list of strings), '
-        '"relevance" (one of: high, medium, low, off_topic), "read_decision" (one of: read in full, skim, skip, monitor authors).'
+        'Return a JSON object with keys: "one_line_summary" (string), '
+        '"why_this_matters_to_you" (string), "key_claims" (list of strings), '
+        '"relevance" (one of: high, medium, low, off_topic), '
+        '"read_decision" (one of: read in full, skim, skip, monitor authors).'
     )
     return "\n".join(parts)
 
@@ -81,8 +98,8 @@ async def _assemble_memo_fields(
     paper: PaperCard,
     novelty_report: NoveltyReport,
     local_overlap_report: LocalOverlapReport,
-) -> tuple[str, list[str], Relevance, str]:
-    """Call LLM to produce one_line_summary, key_claims, relevance, read_decision."""
+) -> tuple[str, str, list[str], Relevance, str]:
+    """Call LLM to produce summary, personalized reason, claims, relevance, and decision."""
     user_prompt = _assemble_user_prompt(paper, novelty_report, local_overlap_report)
     try:
         raw: dict[str, Any] = await call_llm_json(
@@ -93,12 +110,17 @@ async def _assemble_memo_fields(
         logger.warning("Assembler LLM call failed for '%s': %s", paper.title, exc)
         return (
             "Summary unavailable (LLM error).",
+            "Personalized relevance unavailable (LLM error).",
             ["Key claims unavailable."],
             Relevance.MEDIUM,
             "read_decision unavailable",
         )
 
     one_line = (raw.get("one_line_summary") or "").strip() or "No summary generated."
+    why_this_matters = (
+        (raw.get("why_this_matters_to_you") or "").strip()
+        or "No personalized relevance explanation generated."
+    )
     claims_raw = raw.get("key_claims") or []
     if isinstance(claims_raw, list):
         key_claims = [str(c).strip() for c in claims_raw if str(c).strip()]
@@ -118,7 +140,7 @@ async def _assemble_memo_fields(
     else:
         read_decision = "skim"
 
-    return (one_line, key_claims, relevance, read_decision)
+    return (one_line, why_this_matters, key_claims, relevance, read_decision)
 
 
 async def run_triage(arxiv_input: str) -> TriageMemo:
@@ -169,8 +191,10 @@ async def _run_agents_and_assemble(paper: PaperCard) -> TriageMemo:
     )
 
     # Step 3: Assembler — one LLM call to fuse novelty + local overlap into summary & decision
-    one_line_summary, key_claims, relevance, read_decision = await _assemble_memo_fields(
+    one_line_summary, why_this_matters, key_claims, relevance, read_decision = (
+        await _assemble_memo_fields(
         paper, novelty_report, local_overlap_report
+        )
     )
 
     memo = TriageMemo(
@@ -180,6 +204,7 @@ async def _run_agents_and_assemble(paper: PaperCard) -> TriageMemo:
         abstract=paper.abstract,
         relevance=relevance,
         one_line_summary=one_line_summary,
+        why_this_matters_to_you=why_this_matters,
         key_claims=key_claims,
         method_critique=None,
         novelty_report=novelty_report,

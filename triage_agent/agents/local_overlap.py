@@ -19,7 +19,6 @@ from triage_agent.models.memo import LocalOverlapMatch, LocalOverlapReport
 from triage_agent.models.paper import PaperCard
 from triage_agent.utils.llm import call_llm_json
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +37,10 @@ Your job is to:
    overlaps with or is relevant to that draft (methods, goals, setting, etc.).
 3. Assign a relevance score from 0.0 (not related) to 1.0 (highly relevant)
    for each local draft.
-4. Provide an overall relevance score from 0.0 to 1.0 for how important this
+4. Assign a normalized relationship label for each related local draft. Use one
+   of: extends_your_work, competes_with_your_idea, method_transfer,
+   citation_candidate, background_context, same_problem_different_method, related.
+5. Provide an overall relevance score from 0.0 to 1.0 for how important this
    target paper is to the researcher's current work.
 """
 
@@ -58,6 +60,9 @@ Return a JSON object with:
     - "local_id": string (from the input)
     - "local_title": string
     - "relevance": float between 0.0 and 1.0
+    - "relationship_type": one of: extends_your_work, competes_with_your_idea,
+      method_transfer, citation_candidate, background_context,
+      same_problem_different_method, related
     - "overlap_summary": short string (1-3 sentences) describing the overlap
 - "overall_relevance": float between 0.0 and 1.0
 """
@@ -150,6 +155,7 @@ def _parse_local_overlap_response(
                 relevance = 0.0
             relevance = max(0.0, min(1.0, relevance))
 
+            relationship_type = _normalize_relationship_type(item.get("relationship_type"))
             overlap_summary = str(item.get("overlap_summary", "")).strip()
 
             matches.append(
@@ -157,9 +163,25 @@ def _parse_local_overlap_response(
                     local_id=local_id,
                     local_title=local_title or (lp.title if lp else local_id),
                     relevance=relevance,
+                    relationship_type=relationship_type,
                     overlap_summary=overlap_summary,
                 )
             )
 
     return LocalOverlapReport(matches=matches, overall_relevance=overall)
 
+
+def _normalize_relationship_type(raw: Any) -> str:
+    value = str(raw or "").strip().lower()
+    allowed = {
+        "extends_your_work",
+        "competes_with_your_idea",
+        "method_transfer",
+        "citation_candidate",
+        "background_context",
+        "same_problem_different_method",
+        "related",
+    }
+    if value in allowed:
+        return value
+    return "related"

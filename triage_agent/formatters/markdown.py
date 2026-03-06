@@ -3,6 +3,10 @@
 from triage_agent.models.memo import TriageMemo
 
 
+def _humanize_relationship_type(value: str) -> str:
+    return value.replace("_", " ")
+
+
 def render_markdown(memo: TriageMemo) -> str:
     """Render a TriageMemo as a readable Markdown document.
 
@@ -30,6 +34,11 @@ def render_markdown(memo: TriageMemo) -> str:
     # One-line summary
     sections.append(f"> {memo.one_line_summary}")
     sections.append("")
+
+    if memo.why_this_matters_to_you:
+        sections.append("## Why This Matters To You")
+        sections.append(memo.why_this_matters_to_you)
+        sections.append("")
 
     # Key claims
     if memo.key_claims:
@@ -87,7 +96,8 @@ def render_markdown(memo: TriageMemo) -> str:
             sections.append("")
             for m in local_overlap.matches:
                 sections.append(
-                    f"- **{m.local_title}** (id: {m.local_id}, relevance: {m.relevance:.1f})"
+                    f"- **{m.local_title}** (id: {m.local_id}, relevance: {m.relevance:.1f}, "
+                    f"relationship: {_humanize_relationship_type(m.relationship_type)})"
                 )
                 sections.append(f"  {m.overlap_summary}")
             sections.append("")

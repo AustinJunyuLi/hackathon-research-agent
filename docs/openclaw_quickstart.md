@@ -10,6 +10,7 @@ This is the canonical install and verification path for both hackathon judges an
 - [ ] `python scripts/verify_openclaw_install.py` reports `PASS`
 - [ ] `openclaw skills info research-agent` reports `Ready`
 - [ ] `openclaw agent --agent main --message '/research-agent 2106.09685'` returns a triage result
+- [ ] The memo explains why the paper matters to your current drafts or notes
 - [ ] `bash scripts/smoke_openclaw_install.sh` passes without manual approvals
 - [ ] Optional source enrollment succeeds without editing `local_kb/local_manifest.json` by hand
 - [ ] Optional daily digest is configured only after the single-paper path works
@@ -45,6 +46,8 @@ openclaw agent --agent main --message '/research-agent 2106.09685'
 ```
 
 This is the minimum success condition. Do not move on to private source enrollment until this works.
+
+The memo should now include a personalized explanation of why the paper matters to your existing work and, when there are strong local matches, a relationship label such as `extends_your_work` or `method_transfer`.
 
 ## 4. Judge-Safe Smoke Test
 
@@ -102,7 +105,6 @@ After the single-paper and source-sync paths work, install the daily digest:
 ```bash
 python3 skill/scripts/setup_daily_cron.py \
   --project-root "$(pwd)" \
-  --cron "0 8 * * *" \
   --tz "Europe/London"
 ```
 
@@ -114,7 +116,7 @@ python3 skill/scripts/setup_daily_cron.py \
   --whatsapp +447700900123
 ```
 
-The cron flow syncs enrolled sources first, rebuilds `local_kb/local_manifest.json`, and then runs batch triage.
+Default cadence is `Mon/Wed/Fri at 08:00`. The cron flow syncs enrolled sources first, rebuilds `local_kb/local_manifest.json`, then runs batch triage. Low-signal cycles stay terse instead of producing a long noisy digest.
 
 ## 8. Troubleshooting
 

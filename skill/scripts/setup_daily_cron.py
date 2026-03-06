@@ -27,9 +27,12 @@ def _build_message(project_root: Path, batch_file: str, output_dir: str) -> str:
         "Group the digest by read_decision using READ IN FULL, SKIM, and SKIP headings.\n"
         "Each bullet: arxiv_id | short title | read_decision | "
         "relevance | novelty_score | local_relevance.\n"
+        "For READ IN FULL and SKIM, include one short personalized reason grounded in "
+        "the user's local work when available.\n"
         "4) Format the results for WhatsApp: keep it compact and "
         "include a paper ID for drill-down.\n"
-        "If no valid/new items, explicitly say so."
+        "If every paper is skip, monitor, or off-topic, reply exactly: "
+        "\"No strong papers worth pushing this cycle.\""
     )
 
 
@@ -40,8 +43,8 @@ def main() -> None:
     parser.add_argument("--name", default="research-agent-daily")
     parser.add_argument(
         "--cron",
-        default="0 8 * * *",
-        help='Cron expression (default: "0 8 * * *")',
+        default="0 8 * * 1,3,5",
+        help='Cron expression (default: "0 8 * * 1,3,5")',
     )
     parser.add_argument("--tz", default="Europe/London", help="IANA timezone")
     parser.add_argument("--agent", default="main")

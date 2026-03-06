@@ -10,6 +10,7 @@ The project is designed for a concrete research workflow:
 - assemble a structured memo and read decision
 - optionally run batch triage from `ids.txt`
 - optionally send a compact morning digest through OpenClaw cron to Discord or WhatsApp
+- explain why each paper matters to this specific user based on their own drafts
 
 This README is the canonical technical record for the shipped hackathon bundle: what is implemented, how it works, how to install it, how to test it, and how to demo or submit it.
 
@@ -72,6 +73,35 @@ For OpenClaw automation, it:
 - rebuilds `local_kb/local_manifest.json`
 - runs batch triage
 - announces a compact digest grouped by `READ IN FULL`, `SKIM`, and `SKIP`
+- keeps low-signal cycles terse instead of sending a noisy digest
+
+### What `ids.txt` Is
+
+`ids.txt` is the current external-paper queue.
+
+It is **not** a crawler, feed, or discovery engine. It is a plain text file in the project root that contains one arXiv ID or arXiv URL per line. The batch CLI and the scheduled cron flow both read from this file.
+
+Current example shape:
+
+```text
+2301.07041
+https://arxiv.org/abs/1706.03762
+2106.09685
+```
+
+How it is used:
+
+- `triage --batch-file ids.txt ...` reads it directly
+- the cron helper syncs your enrolled sources, then triages the papers listed in `ids.txt`
+- `skill/memory/seen.json` tracks what has already been triaged on the OpenClaw side
+
+Why this design exists:
+
+- it is deterministic for demos and judging
+- it is easy to inspect and edit by hand
+- it keeps the current product focused on **triage quality** and **personalization quality**
+
+For the hackathon bundle, `ids.txt` is the right source of external papers because it is reliable and reproducible. For a longer-term product, the next step would be an automatic arXiv discovery job that writes into `ids.txt` or replaces it.
 
 ## Architecture
 
@@ -147,6 +177,7 @@ Important behavior:
 - `_run_agents_and_assemble(...)` fans out three sub-agents in parallel using `asyncio.gather(...)`
 - the final assembler call merges novelty and local-overlap signals into:
   - `one_line_summary`
+  - `why_this_matters_to_you`
   - `key_claims`
   - `relevance`
   - `read_decision`
@@ -180,6 +211,7 @@ The summary object currently includes:
 - `arxiv_id`
 - `title`
 - `summary`
+- `why_this_matters_to_you`
 - `read_decision`
 - `novelty_score`
 - `relevance`
@@ -218,9 +250,20 @@ The `Local Overlap Agent` compares the incoming paper against that manifest and 
 
 - an overall local relevance score
 - matching local drafts
+- a normalized relationship label for each top local match
 - overlap summaries
 
-This signal is included in both the detailed memo and the batch summary.
+Normalized relationship labels currently include:
+
+- `extends_your_work`
+- `competes_with_your_idea`
+- `method_transfer`
+- `citation_candidate`
+- `background_context`
+- `same_problem_different_method`
+- `related`
+
+This signal is included in both the detailed memo and the batch summary. The final memo also adds a memo-level `why_this_matters_to_you` explanation so the output is explicitly personalized rather than only score-based.
 
 ### Source Enrollment System
 
@@ -311,6 +354,10 @@ The helper creates an OpenClaw cron task that instructs the agent to:
 5. read `out/daily_latest/batch_summary.json`
 6. announce a compact grouped digest
 
+Current default cadence:
+
+- `Mon/Wed/Fri at 08:00` (`0 8 * * 1,3,5`)
+
 WhatsApp formatting is handled by `skill/scripts/format_whatsapp.py`.
 
 The digest groups papers into:
@@ -319,7 +366,7 @@ The digest groups papers into:
 - `SKIM`
 - `SKIP`
 
-and asks the user to reply with a paper ID for drill-down.
+For `READ IN FULL` and `SKIM`, it now uses the personalized `why_this_matters_to_you` reason when available. If a cycle contains only low-signal `skip` items, it emits a terse message instead of a long noisy digest.
 
 ### Shipping Helpers Added For The Hackathon
 
@@ -520,6 +567,14 @@ Expected outputs:
 - `out/demo/batch_summary.json`
 - `out/demo/batch_summary.md`
 
+Practical guidance:
+
+- use `ids.txt` as the shortlist of external papers you want the system to evaluate
+- use source enrollment for your own drafts, notes, GitHub repos, and Overleaf projects
+- the current product combines those two things:
+  - `ids.txt` = what to triage
+  - enrolled sources = what to compare against
+
 ### Source Enrollment
 
 Local source:
@@ -546,14 +601,15 @@ python skill/scripts/enroll.py sync
 
 ### Daily Digest Setup
 
-Install a daily cron:
+Install the default three-times-weekly cron:
 
 ```bash
 python3 skill/scripts/setup_daily_cron.py \
   --project-root "$(pwd)" \
-  --cron "0 8 * * *" \
   --tz "Europe/London"
 ```
+
+Default cadence is `Mon/Wed/Fri at 08:00`. Override `--cron` only if you want a different schedule.
 
 Target WhatsApp directly:
 
@@ -616,6 +672,7 @@ This covers:
 - skill-script behavior
 - cron prompt construction
 - WhatsApp digest formatting
+- personalized memo/digest behavior
 
 ### 5. Source-Enrollment Backend Tests
 
@@ -656,6 +713,10 @@ openclaw agent --agent main --message '/research-agent 2106.09685'
 bash scripts/smoke_openclaw_install.sh
 pytest tests/test_install_checks.py \
        tests/test_smoke_openclaw_install.py \
+       tests/test_models.py \
+       tests/test_formatters.py \
+       tests/test_local_overlap.py \
+       tests/test_cli_summary.py \
        tests/test_enroll_script.py \
        tests/test_skill_scripts.py -q
 ```
@@ -697,7 +758,7 @@ Use this structure:
 - problem: too many papers, not enough time
 - method: retrieve prior art + compare against my own drafts + produce a read decision
 - OpenClaw value: skill-native runtime, cron automation, channel delivery
-- personalization value: local/GitHub/Overleaf enrollment keeps the local-overlap signal fresh
+- personalization value: local/GitHub/Overleaf enrollment keeps the local-overlap signal fresh, and each memo now explains why the paper matters to the user’s existing work
 - bundle quality: install verifier + smoke test + docs make the repo judge-usable
 
 ### Bundle Files Worth Linking
@@ -776,6 +837,7 @@ Those warnings are currently environmental OpenClaw configuration warnings. They
 - Semantic Scholar is the main related-work dependency and may throttle without an API key
 - the smoke test validates install and personalization plumbing, not the full expensive LLM pipeline a second time
 - Overleaf enrollment requires an explicit Git mirror URL and token
+- external paper discovery is still driven by `ids.txt`; scheduled runs sync your own sources every cycle but do not yet crawl arbitrary websites or auto-refresh arXiv feeds for new papers
 - repo-wide lint/type cleanup outside the touched shipping/install surface is not part of this bundle
 
 ## Secondary Standalone CLI Path

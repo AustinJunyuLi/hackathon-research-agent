@@ -8,7 +8,7 @@
 
 ## Short Pitch
 
-`Research Agent` is an OpenClaw-native research assistant that turns a raw arXiv ID list into actionable reading decisions. It fetches metadata, compares papers against prior art and the user's own drafts, then delivers a compact morning digest to Discord or WhatsApp. The latest version adds source enrollment for Overleaf, GitHub, and local research folders so the local-overlap signal stays current without manual manifest editing.
+`Research Agent` is an OpenClaw-native research assistant that turns a raw arXiv ID list into actionable reading decisions. It fetches metadata, compares papers against prior art and the user's own drafts, explains why each paper matters to that specific user, then delivers a compact digest to Discord or WhatsApp. The latest version adds source enrollment for Overleaf, GitHub, and local research folders so the local-overlap signal stays current without manual manifest editing.
 
 ## What To Demo
 
@@ -23,9 +23,9 @@
 
 ### Description
 
-`Research Agent` solves a practical research bottleneck: deciding what to read deeply, what to skim, and what to ignore when new papers keep arriving. The agent runs an autonomous triage pipeline over arXiv papers, combining retrieval, novelty checking, and local-overlap analysis against the user's own drafts. It is built for OpenClaw first, so it runs as a skill, supports scheduled daily digests, and can deliver concise updates to Discord or WhatsApp.
+`Research Agent` solves a practical research bottleneck: deciding what to read deeply, what to skim, and what to ignore when new papers keep arriving. The agent runs an autonomous triage pipeline over arXiv papers, combining retrieval, novelty checking, and local-overlap analysis against the user's own drafts. It is built for OpenClaw first, so it runs as a skill, supports scheduled digests on a lower-noise Mon/Wed/Fri cadence, and can deliver concise updates to Discord or WhatsApp.
 
-The final push adds a source enrollment system that mirrors Overleaf or GitHub repos and scans local research folders to rebuild the local manifest automatically. That keeps relevance judgments grounded in the user's current work instead of a stale hand-maintained file. The result is a demo-ready agent that can operate on a schedule and stay aligned with an active research workflow.
+The final push adds a source enrollment system that mirrors Overleaf or GitHub repos and scans local research folders to rebuild the local manifest automatically. That keeps relevance judgments grounded in the user's current work instead of a stale hand-maintained file. It also adds relationship labels and a personalized `why this matters to you` explanation to each memo, so the output is not just a scorecard but an explicit connection to the user's active projects.
 
 The canonical install and demo path is now repo clone plus OpenClaw bootstrap, verification, and a judge-safe smoke test. That keeps the first-run path public and reproducible before any private GitHub or Overleaf credentials are introduced.
 
@@ -37,6 +37,8 @@ The canonical install and demo path is now repo clone plus OpenClaw bootstrap, v
 - Discord and WhatsApp-friendly summary formatting
 - Source enrollment for Overleaf, GitHub, and local folders
 - Automatic manifest rebuild before triage runs
+- Personalized memo output with local relationship labels and user-specific relevance reasons
+- Mon/Wed/Fri default push cadence to reduce notification noise
 - Judge-safe bootstrap and smoke-test flow for installation and demo
 
 ## Assets Checklist

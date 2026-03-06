@@ -37,6 +37,18 @@ def format_whatsapp_digest(summary_path: str | Path) -> str:
             if item.get("read_decision") in {"skip", "monitor authors", "monitor"}
         ],
     }
+    strong_items = grouped["READ IN FULL"] + grouped["SKIM"]
+
+    if not strong_items:
+        return "\n".join(
+            [
+                f"Research Digest -- {date.today().isoformat()}",
+                "",
+                "No strong papers worth pushing this cycle.",
+                "",
+                "Reply with a paper ID for the full memo.",
+            ]
+        )
 
     lines = [f"Research Digest -- {date.today().isoformat()}", ""]
 
@@ -62,6 +74,11 @@ def format_whatsapp_digest(summary_path: str | Path) -> str:
                 score_parts.append(f"local {local_relevance:.2f}")
             if score_parts:
                 lines.append(f"  {' | '.join(score_parts)}")
+
+            personalized_reason = paper.get("why_this_matters_to_you")
+            if isinstance(personalized_reason, str) and personalized_reason.strip():
+                lines.append(f"  {_shorten(personalized_reason)}")
+                continue
 
             summary = paper.get("summary")
             if isinstance(summary, str) and summary.strip():

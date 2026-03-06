@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 from dotenv import load_dotenv
 from rich.console import Console
@@ -19,6 +20,24 @@ from triage_agent.orchestrator import run_triage
 console = Console()
 
 
+class LocalRelatedSummary(TypedDict):
+    local_id: str
+    local_title: str
+    relationship_type: str
+
+
+class BatchSummaryRow(TypedDict):
+    arxiv_id: str
+    title: str
+    summary: str
+    why_this_matters_to_you: str
+    read_decision: str
+    novelty_score: float
+    relevance: str
+    local_relevance: float
+    local_related: list[LocalRelatedSummary]
+
+
 def _bootstrap_default_paths() -> None:
     """Set best-effort defaults so local_kb works outside repo CWD."""
     project_root = Path(__file__).resolve().parent.parent
@@ -28,20 +47,24 @@ def _bootstrap_default_paths() -> None:
         os.environ.setdefault("LOCAL_MANIFEST_PATH", str(local_manifest))
 
 
-def _build_summary(memos: list[tuple[str, TriageMemo]]) -> list[dict]:
+def _build_summary(memos: list[tuple[str, TriageMemo]]) -> list[BatchSummaryRow]:
     """Build summary list for batch: one_line_summary, read_decision, scores, local links."""
-    out: list[dict] = []
+    out: list[BatchSummaryRow] = []
     for arxiv_id, memo in memos:
         novelty_score = 0.0
         if memo.novelty_report is not None:
             novelty_score = memo.novelty_report.novelty_score
 
         local_relevance = 0.0
-        local_related: list[dict] = []
+        local_related: list[LocalRelatedSummary] = []
         if memo.local_overlap is not None:
             local_relevance = memo.local_overlap.overall_relevance
             local_related = [
-                {"local_id": m.local_id, "local_title": m.local_title}
+                {
+                    "local_id": m.local_id,
+                    "local_title": m.local_title,
+                    "relationship_type": m.relationship_type,
+                }
                 for m in memo.local_overlap.matches
             ]
 
@@ -50,6 +73,7 @@ def _build_summary(memos: list[tuple[str, TriageMemo]]) -> list[dict]:
                 "arxiv_id": arxiv_id,
                 "title": memo.title,
                 "summary": memo.one_line_summary,
+                "why_this_matters_to_you": memo.why_this_matters_to_you,
                 "read_decision": memo.read_decision,
                 "novelty_score": round(novelty_score, 2),
                 "relevance": memo.relevance.value,
@@ -60,7 +84,7 @@ def _build_summary(memos: list[tuple[str, TriageMemo]]) -> list[dict]:
     return out
 
 
-def _render_summary_md(summaries: list[dict]) -> str:
+def _render_summary_md(summaries: list[BatchSummaryRow]) -> str:
     """Render summary as Markdown table."""
     lines = [
         "# Batch Triage Summary",

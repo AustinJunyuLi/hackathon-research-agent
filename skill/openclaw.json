@@ -6,7 +6,7 @@
       "description": "Daily morning paper triage digest",
       "schedule": {
         "type": "cron",
-        "expression": "0 8 * * *"
+        "expression": "0 8 * * 1,3,5"
       },
       "execution": "isolated",
       "task": "First sync enrolled research sources to rebuild the local manifest. Then read ids.txt in the project root, run batch triage for all valid IDs/URLs, and produce per-paper outputs plus a compact daily digest grouped by read_decision (READ IN FULL, SKIM, SKIP). Focus on high relevance first, then medium, and include a paper ID for drill-down. Keep the message suitable for Discord or WhatsApp. If there are no new/valid items, report that clearly.",
